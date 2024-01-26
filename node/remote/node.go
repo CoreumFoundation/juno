@@ -184,6 +184,7 @@ func (cp *Node) Validators(height int64) (*tmctypes.ResultValidators, error) {
 		vals.Validators = append(vals.Validators, result.Validators...)
 		vals.Count += result.Count
 		vals.Total = result.Total
+		vals.BlockHeight = result.BlockHeight
 		page++
 		stop = vals.Count == vals.Total
 	}
