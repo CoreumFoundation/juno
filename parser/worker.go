@@ -6,11 +6,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/cosmos/cosmos-sdk/x/authz"
-
 	"github.com/forbole/juno/v5/logging"
-
-	"github.com/cosmos/cosmos-sdk/codec"
 
 	"github.com/forbole/juno/v5/database"
 	"github.com/forbole/juno/v5/types/config"
@@ -32,7 +28,6 @@ type Worker struct {
 	index int
 
 	queue   types.HeightQueue
-	codec   codec.Codec
 	modules []modules.Module
 
 	node   node.Node
@@ -44,7 +39,6 @@ type Worker struct {
 func NewWorker(ctx *Context, queue types.HeightQueue, index int) Worker {
 	return Worker{
 		index:   index,
-		codec:   ctx.EncodingConfig.Codec,
 		node:    ctx.Node,
 		queue:   queue,
 		db:      ctx.Database,
@@ -193,7 +187,7 @@ func (w Worker) SaveValidators(vals []*tmtypes.Validator) error {
 // and persists them to the database along with attributable metadata. An error
 // is returned if the write fails.
 func (w Worker) ExportBlock(
-	b *tmctypes.ResultBlock, r *tmctypes.ResultBlockResults, txs []*types.Tx, vals *tmctypes.ResultValidators,
+	b *tmctypes.ResultBlock, r *tmctypes.ResultBlockResults, txs []*types.Transaction, vals *tmctypes.ResultValidators,
 ) error {
 	// Save all validators
 	err := w.SaveValidators(vals.Validators)
@@ -270,16 +264,16 @@ func (w Worker) ExportCommit(commit *tmtypes.Commit, vals *tmctypes.ResultValida
 
 // saveTx accepts the transaction and persists it inside the database.
 // An error is returned if the write fails.
-func (w Worker) saveTx(tx *types.Tx) error {
+func (w Worker) saveTx(tx *types.Transaction) error {
 	err := w.db.SaveTx(tx)
 	if err != nil {
-		return fmt.Errorf("failed to handle transaction with hash %s: %s", tx.TxHash, err)
+		return fmt.Errorf("failed to handle transaction with hash %s: %s", tx.TxResponse.TxHash, err)
 	}
 	return nil
 }
 
 // handleTx accepts the transaction and calls the tx handlers.
-func (w Worker) handleTx(tx *types.Tx) {
+func (w Worker) handleTx(tx *types.Transaction) {
 	// Call the tx handlers
 	for _, module := range w.modules {
 		if transactionModule, ok := module.(modules.TransactionModule); ok {
@@ -293,33 +287,13 @@ func (w Worker) handleTx(tx *types.Tx) {
 
 // handleMessage accepts the transaction and handles messages contained
 // inside the transaction.
-func (w Worker) handleMessage(index int, msg sdk.Msg, tx *types.Tx) {
+func (w Worker) handleMessage(index int, msg types.Message, tx *types.Transaction) {
 	// Allow modules to handle the message
 	for _, module := range w.modules {
 		if messageModule, ok := module.(modules.MessageModule); ok {
 			err := messageModule.HandleMsg(index, msg, tx)
 			if err != nil {
 				w.logger.MsgError(module, tx, msg, err)
-			}
-		}
-	}
-
-	// If it's a MsgExecute, we need to make sure the included messages are handled as well
-	if msgExec, ok := msg.(*authz.MsgExec); ok {
-		for authzIndex, msgAny := range msgExec.Msgs {
-			var executedMsg sdk.Msg
-			err := w.codec.UnpackAny(msgAny, &executedMsg)
-			if err != nil {
-				w.logger.Error("unable to unpack MsgExec inner message", "index", authzIndex, "error", err)
-			}
-
-			for _, module := range w.modules {
-				if messageModule, ok := module.(modules.AuthzMessageModule); ok {
-					err = messageModule.HandleMsgExec(index, msgExec, authzIndex, executedMsg, tx)
-					if err != nil {
-						w.logger.MsgError(module, tx, executedMsg, err)
-					}
-				}
 			}
 		}
 	}
@@ -347,7 +321,7 @@ func escapeNonUTF8Characters(v string) string {
 
 // ExportTxs accepts a slice of transactions and persists then inside the database.
 // An error is returned if the write fails.
-func (w Worker) ExportTxs(txs []*types.Tx) error {
+func (w Worker) ExportTxs(txs []*types.Transaction) error {
 	// handle all transactions inside the block
 	for _, tx := range txs {
 		// non-utf8 characters are not accepted by postgres
@@ -362,20 +336,9 @@ func (w Worker) ExportTxs(txs []*types.Tx) error {
 		// call the tx handlers
 		w.handleTx(tx)
 
-		// handle all messages contained inside the transaction
-		sdkMsgs := make([]sdk.Msg, len(tx.Body.Messages))
-		for i, msg := range tx.Body.Messages {
-			var stdMsg sdk.Msg
-			err := w.codec.UnpackAny(msg, &stdMsg)
-			if err != nil {
-				return err
-			}
-			sdkMsgs[i] = stdMsg
-		}
-
 		// call the msg handlers
-		for i, sdkMsg := range sdkMsgs {
-			w.handleMessage(i, sdkMsg, tx)
+		for i, msg := range tx.Tx.Body.Messages {
+			w.handleMessage(i, msg, tx)
 		}
 	}
 
