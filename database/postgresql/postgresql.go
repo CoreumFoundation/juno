@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"strings"
 
 	"github.com/jmoiron/sqlx"
@@ -207,7 +208,13 @@ ON CONFLICT (hash, partition_id) DO UPDATE
 	}
 	sigInfoBz := fmt.Sprintf("[%s]", strings.Join(sigInfos, ","))
 
-	logsBz, err := json.Marshal(tx.Logs)
+	if len(tx.Logs) == 0 && len(tx.Events) > 0 {
+		tx.Logs = append(tx.Logs, sdk.ABCIMessageLog{
+			Events: sdk.StringifyEvents(tx.Events),
+		})
+	}
+
+	logsBz, err := json.Marshal(tx.Events)
 	if err != nil {
 		return err
 	}
