@@ -208,17 +208,23 @@ ON CONFLICT (hash, partition_id) DO UPDATE
 	}
 	sigInfoBz := fmt.Sprintf("[%s]", strings.Join(sigInfos, ","))
 
-	if len(tx.Logs) == 0 && len(tx.Events) > 0 {
-		tx.Logs = sdk.ABCIMessageLogs{
+	var logsBz []byte
+	if len(tx.Logs) > 0 {
+		var err error
+		logsBz, err = json.Marshal(tx.Logs)
+		if err != nil {
+			return err
+		}
+	} else {
+		var err error
+		logsBz, err = json.Marshal(sdk.ABCIMessageLogs{
 			{
 				Events: sdk.StringifyEvents(tx.Events),
 			},
+		})
+		if err != nil {
+			return err
 		}
-	}
-
-	logsBz, err := json.Marshal(tx.Events)
-	if err != nil {
-		return err
 	}
 
 	_, err = db.SQL.Exec(sqlStatement,
