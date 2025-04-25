@@ -10,6 +10,7 @@ import (
 
 	"google.golang.org/grpc/credentials"
 
+	"github.com/cosmos/cosmos-sdk/codec"
 	grpctypes "github.com/cosmos/cosmos-sdk/types/grpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -29,8 +30,8 @@ func GetHeightRequestContext(context context.Context, height int64) context.Cont
 }
 
 // MustCreateGrpcConnection creates a new gRPC connection using the provided configuration and panics on error
-func MustCreateGrpcConnection(cfg *GRPCConfig) *grpc.ClientConn {
-	grpConnection, err := CreateGrpcConnection(cfg)
+func MustCreateGrpcConnection(cfg *GRPCConfig, cdc codec.Codec) *grpc.ClientConn {
+	grpConnection, err := CreateGrpcConnection(cfg, cdc)
 	if err != nil {
 		panic(err)
 	}
@@ -38,7 +39,7 @@ func MustCreateGrpcConnection(cfg *GRPCConfig) *grpc.ClientConn {
 }
 
 // CreateGrpcConnection creates a new gRPC client connection from the given configuration
-func CreateGrpcConnection(cfg *GRPCConfig) (*grpc.ClientConn, error) {
+func CreateGrpcConnection(cfg *GRPCConfig, cdc codec.Codec) (*grpc.ClientConn, error) {
 	var grpcOpts []grpc.DialOption
 	if cfg.Insecure {
 		grpcOpts = append(grpcOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -47,6 +48,12 @@ func CreateGrpcConnection(cfg *GRPCConfig) (*grpc.ClientConn, error) {
 			MinVersion: tls.VersionTLS12,
 		})))
 	}
+
+	pc, ok := cdc.(codec.GRPCCodecProvider)
+	if !ok {
+		panic("failed to cast codec to codec.GRPCCodecProvider)")
+	}
+	grpcOpts = append(grpcOpts, grpc.WithDefaultCallOptions(grpc.ForceCodec(pc.GRPCCodec())))
 
 	address := HTTPProtocols.ReplaceAllString(cfg.Address, "")
 	return grpc.Dial(address, grpcOpts...)

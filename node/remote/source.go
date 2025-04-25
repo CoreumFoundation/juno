@@ -3,6 +3,7 @@ package remote
 import (
 	"context"
 
+	"github.com/cosmos/cosmos-sdk/codec"
 	"google.golang.org/grpc"
 
 	"github.com/forbole/juno/v6/node"
@@ -19,10 +20,10 @@ type Source struct {
 }
 
 // NewSource returns a new Source instance
-func NewSource(config *GRPCConfig) (*Source, error) {
+func NewSource(config *GRPCConfig, cdc codec.Codec) (*Source, error) {
 	return &Source{
 		Ctx:      context.Background(),
-		GrpcConn: MustCreateGrpcConnection(config),
+		GrpcConn: MustCreateGrpcConnection(config, cdc),
 	}, nil
 }
 
