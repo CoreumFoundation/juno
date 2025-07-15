@@ -5,8 +5,9 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	sdk "github.com/cosmos/cosmos-sdk/types"
 	"strings"
+
+	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/jmoiron/sqlx"
 
@@ -139,11 +140,13 @@ VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING`
 // GetTotalBlocks implements database.Database
 func (db *Database) GetTotalBlocks() int64 {
 	var blockCount int64
-	err := db.SQL.QueryRow(`SELECT count(*) FROM block;`).Scan(&blockCount)
-	if err != nil {
-		return 0
+	err := db.SQL.QueryRow(`SELECT COALESCE(block_count, 0) FROM stats WHERE id = 0;`).Scan(&blockCount)
+	if err != nil || blockCount == 0 {
+		err = db.SQL.QueryRow(`SELECT COUNT(*) FROM block;`).Scan(&blockCount)
+		if err != nil {
+			return 0
+		}
 	}
-
 	return blockCount
 }
 
