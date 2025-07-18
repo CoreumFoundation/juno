@@ -22,7 +22,7 @@ import (
 	"github.com/forbole/juno/v6/types/utils"
 )
 
-const TOTAL_BLOCKS_PROMETHEUS_UPDATE_BLOCK_INTERVAL = 100
+const TOTAL_BLOCKS_PROMETHEUS_UPDATE_BLOCK_INTERVAL = 50
 
 // Worker defines a job consumer that is responsible for getting and
 // aggregating block and associated data and exporting it to a database.
