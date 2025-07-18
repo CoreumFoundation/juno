@@ -22,6 +22,8 @@ import (
 	"github.com/forbole/juno/v6/types/utils"
 )
 
+const TOTAL_BLOCKS_PROMETHEUS_UPDATE_BLOCK_INTERVAL = 100
+
 // Worker defines a job consumer that is responsible for getting and
 // aggregating block and associated data and exporting it to a database.
 type Worker struct {
@@ -141,7 +143,7 @@ func (w Worker) ProcessTransactions(height int64) error {
 		return fmt.Errorf("failed to get transactions for block: %s", err)
 	}
 
-	return w.ExportTxs(txs)
+	return w.ExportTxs(height, txs)
 }
 
 // HandleGenesis accepts a GenesisDoc and calls all the registered genesis handlers
@@ -225,7 +227,7 @@ func (w Worker) ExportBlock(
 	}
 
 	// Export the transactions
-	return w.ExportTxs(txs)
+	return w.ExportTxs(b.Block.Height, txs)
 }
 
 // ExportCommit accepts a block commitment and a corresponding set of
@@ -350,7 +352,7 @@ func escapeNonUTF8Characters(v string) string {
 
 // ExportTxs accepts a slice of transactions and persists then inside the database.
 // An error is returned if the write fails.
-func (w Worker) ExportTxs(txs []*types.Transaction) error {
+func (w Worker) ExportTxs(height int64, txs []*types.Transaction) error {
 	// handle all transactions inside the block
 	for _, tx := range txs {
 		// non-utf8 characters are not accepted by postgres
@@ -371,8 +373,12 @@ func (w Worker) ExportTxs(txs []*types.Transaction) error {
 		}
 	}
 
-	totalBlocks := w.db.GetTotalBlocks()
-	logging.DbBlockCount.WithLabelValues("total_blocks_in_db").Set(float64(totalBlocks))
+	// every TOTAL_BLOCKS_PROMETHEUS_UPDATE_BLOCK_INTERVAL blocks, we log the total number of blocks in the database
+	// this change helps reduce pressure on the database and allows us to monitor the block count
+	if height%TOTAL_BLOCKS_PROMETHEUS_UPDATE_BLOCK_INTERVAL == 0 {
+		totalBlocks := w.db.GetTotalBlocks()
+		logging.DbBlockCount.WithLabelValues("total_blocks_in_db").Set(float64(totalBlocks))
+	}
 
 	dbLatestHeight, err := w.db.GetLastBlockHeight()
 	if err != nil {
