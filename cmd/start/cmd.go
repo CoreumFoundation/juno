@@ -94,7 +94,7 @@ func startParsing(ctx *parser.Context) error {
 	// off of the export queue.
 	for i, w := range workers {
 		ctx.Logger.Debug("starting worker...", "number", i+1)
-		go w.Start()
+		go w.Start(cfg.OverwriteOldBlocks)
 	}
 
 	// Listen for and trap any OS signal to gracefully shutdown and exit
@@ -106,7 +106,11 @@ func startParsing(ctx *parser.Context) error {
 	}
 
 	if cfg.ParseOldBlocks {
-		go enqueueMissingBlocks(exportQueue, ctx)
+		if cfg.OverwriteOldBlocks {
+			go enqueueAllBlocks(exportQueue, ctx)
+		} else {
+			go enqueueMissingBlocks(exportQueue, ctx)
+		}
 	}
 
 	if cfg.ParseNewBlocks {
@@ -161,6 +165,18 @@ func enqueueMissingBlocks(exportQueue types.HeightQueue, ctx *parser.Context) {
 			ctx.Logger.Debug("enqueueing missing block", "height", i)
 			exportQueue <- i
 		}
+	}
+}
+
+func enqueueAllBlocks(exportQueue types.HeightQueue, ctx *parser.Context) {
+	// Get the config
+	cfg := config.Cfg.Parser
+
+	// Get the latest height
+	latestBlockHeight := mustGetLatestHeight(ctx)
+	for i := cfg.StartHeight; i <= latestBlockHeight; i++ {
+		ctx.Logger.Debug("enqueueing old block", "height", i)
+		exportQueue <- i
 	}
 }
 
