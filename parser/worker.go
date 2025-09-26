@@ -51,7 +51,7 @@ func NewWorker(ctx *Context, queue types.HeightQueue, index int) Worker {
 
 // Start starts a worker by listening for new jobs (block heights) from the
 // given worker queue. Any failed job is logged and re-enqueued.
-func (w Worker) Start() {
+func (w Worker) Start(overwriteExistingBlocks bool) {
 	logging.WorkerCount.Inc()
 	chainID, err := w.node.ChainID()
 	if err != nil {
@@ -59,13 +59,22 @@ func (w Worker) Start() {
 	}
 
 	for i := range w.queue {
-		if err := w.ProcessIfNotExists(i); err != nil {
+		operation := "block"
+		var err error
+		if overwriteExistingBlocks {
+			operation = "block overwrite"
+			err = w.Process(i)
+		} else {
+			err = w.ProcessIfNotExists(i)
+		}
+
+		if err != nil {
 			// re-enqueue any failed job after average block time
 			time.Sleep(config.GetAvgBlockTime())
 
 			// TODO: Implement exponential backoff or max retries for a block height.
 			go func() {
-				w.logger.Error("re-enqueueing failed block", "height", i, "err", err)
+				w.logger.Error("re-enqueueing failed "+operation, "height", i, "err", err)
 				w.queue <- i
 			}()
 		}
