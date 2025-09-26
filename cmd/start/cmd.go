@@ -94,7 +94,7 @@ func startParsing(ctx *parser.Context) error {
 	// off of the export queue.
 	for i, w := range workers {
 		ctx.Logger.Debug("starting worker...", "number", i+1)
-		go w.Start(cfg.OverwriteOldBlocks)
+		go w.Start(cfg.OverwriteExistingBlocks)
 	}
 
 	// Listen for and trap any OS signal to gracefully shutdown and exit
@@ -106,7 +106,7 @@ func startParsing(ctx *parser.Context) error {
 	}
 
 	if cfg.ParseOldBlocks {
-		if cfg.OverwriteOldBlocks {
+		if cfg.OverwriteExistingBlocks {
 			go enqueueAllBlocks(exportQueue, ctx)
 		} else {
 			go enqueueMissingBlocks(exportQueue, ctx)

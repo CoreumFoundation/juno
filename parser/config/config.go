@@ -3,15 +3,15 @@ package config
 import "time"
 
 type Config struct {
-	GenesisFilePath    string         `yaml:"genesis_file_path,omitempty"`
-	Workers            int64          `yaml:"workers"`
-	StartHeight        int64          `yaml:"start_height"`
-	AvgBlockTime       *time.Duration `yaml:"average_block_time"`
-	ParseNewBlocks     bool           `yaml:"listen_new_blocks"`
-	ParseOldBlocks     bool           `yaml:"parse_old_blocks"`
-	OverwriteOldBlocks bool           `yaml:"overwrite_old_blocks"`
-	ParseGenesis       bool           `yaml:"parse_genesis"`
-	FastSync           bool           `yaml:"fast_sync,omitempty"`
+	GenesisFilePath         string         `yaml:"genesis_file_path,omitempty"`
+	Workers                 int64          `yaml:"workers"`
+	StartHeight             int64          `yaml:"start_height"`
+	AvgBlockTime            *time.Duration `yaml:"average_block_time"`
+	ParseNewBlocks          bool           `yaml:"listen_new_blocks"`
+	ParseOldBlocks          bool           `yaml:"parse_old_blocks"`
+	OverwriteExistingBlocks bool           `yaml:"overwrite_existing_blocks"`
+	ParseGenesis            bool           `yaml:"parse_genesis"`
+	FastSync                bool           `yaml:"fast_sync,omitempty"`
 }
 
 // NewParsingConfig allows to build a new Config instance
@@ -23,15 +23,15 @@ func NewParsingConfig(
 	avgBlockTime *time.Duration,
 ) Config {
 	return Config{
-		Workers:            workers,
-		ParseOldBlocks:     parseOldBlocks,
-		OverwriteOldBlocks: overwriteBlocks,
-		ParseNewBlocks:     parseNewBlocks,
-		ParseGenesis:       parseGenesis,
-		GenesisFilePath:    genesisFilePath,
-		StartHeight:        startHeight,
-		FastSync:           fastSync,
-		AvgBlockTime:       avgBlockTime,
+		Workers:                 workers,
+		ParseOldBlocks:          parseOldBlocks,
+		OverwriteExistingBlocks: overwriteBlocks,
+		ParseNewBlocks:          parseNewBlocks,
+		ParseGenesis:            parseGenesis,
+		GenesisFilePath:         genesisFilePath,
+		StartHeight:             startHeight,
+		FastSync:                fastSync,
+		AvgBlockTime:            avgBlockTime,
 	}
 }
 

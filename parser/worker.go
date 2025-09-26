@@ -51,7 +51,7 @@ func NewWorker(ctx *Context, queue types.HeightQueue, index int) Worker {
 
 // Start starts a worker by listening for new jobs (block heights) from the
 // given worker queue. Any failed job is logged and re-enqueued.
-func (w Worker) Start(overwriteExsitingBlocks bool) {
+func (w Worker) Start(overwriteExistingBlocks bool) {
 	logging.WorkerCount.Inc()
 	chainID, err := w.node.ChainID()
 	if err != nil {
@@ -61,7 +61,7 @@ func (w Worker) Start(overwriteExsitingBlocks bool) {
 	for i := range w.queue {
 		operation := "block"
 		var err error
-		if overwriteExsitingBlocks {
+		if overwriteExistingBlocks {
 			operation = "block overwrite"
 			err = w.Process(i)
 		} else {
