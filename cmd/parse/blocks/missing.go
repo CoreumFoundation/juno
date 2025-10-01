@@ -29,7 +29,7 @@ func newMissingCmd(parseConfig *parsecmdtypes.Config) *cobra.Command {
 				return err
 			}
 
-			workerCtx := parser.NewContext(parseCtx.Node, parseCtx.Database, parseCtx.Logger, parseCtx.Modules)
+			workerCtx := parser.NewContext(parseCtx.Node, parseCtx.Database, parseCtx.Logger, parseCtx.Modules, parseCtx.ModulesToOverwrite)
 			worker := parser.NewWorker(workerCtx, nil, 0)
 
 			dbLastHeight, err := parseCtx.Database.GetLastBlockHeight()
@@ -38,7 +38,7 @@ func newMissingCmd(parseConfig *parsecmdtypes.Config) *cobra.Command {
 			}
 
 			for _, k := range parseCtx.Database.GetMissingHeights(startHeight, dbLastHeight) {
-				err = worker.Process(k)
+				err = worker.Process(k, false)
 				if err != nil {
 					return fmt.Errorf("error while re-fetching block %d: %s", k, err)
 				}

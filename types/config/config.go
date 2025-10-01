@@ -65,8 +65,9 @@ func (c Config) GetBytes() ([]byte, error) {
 // ---------------------------------------------------------------------------------------------------------------------
 
 type ChainConfig struct {
-	Bech32Prefix string   `yaml:"bech32_prefix"`
-	Modules      []string `yaml:"modules"`
+	Bech32Prefix       string   `yaml:"bech32_prefix"`
+	Modules            []string `yaml:"modules"`
+	ModulesToOverwrite []string `yaml:"modules_to_overwrite"`
 }
 
 // NewChainConfig returns a new ChainConfig instance
