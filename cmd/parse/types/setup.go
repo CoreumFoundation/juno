@@ -54,8 +54,9 @@ func GetParserContext(cfg config.Config, parseConfig *Config) (*parser.Context, 
 	context := modsregistrar.NewContext(cfg, sdkConfig, db, cp, parseConfig.GetLogger())
 	mods := parseConfig.GetRegistrar().BuildModules(context)
 	registeredModules := modsregistrar.GetModules(mods, cfg.Chain.Modules, parseConfig.GetLogger())
+	registeredModulesToOverwrite := modsregistrar.GetModules(mods, cfg.Chain.ModulesToOverwrite, parseConfig.GetLogger())
 
-	return parser.NewContext(cp, db, parseConfig.GetLogger(), registeredModules), nil
+	return parser.NewContext(cp, db, parseConfig.GetLogger(), registeredModules, registeredModulesToOverwrite), nil
 }
 
 // getConfig returns the SDK Config instance as well as if it's sealed or not

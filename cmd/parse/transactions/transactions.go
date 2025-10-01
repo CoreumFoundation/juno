@@ -32,7 +32,7 @@ You can specify a custom height range by using the %s and %s flags.
 				return err
 			}
 
-			workerCtx := parser.NewContext(parseCtx.Node, parseCtx.Database, parseCtx.Logger, parseCtx.Modules)
+			workerCtx := parser.NewContext(parseCtx.Node, parseCtx.Database, parseCtx.Logger, parseCtx.Modules, parseCtx.ModulesToOverwrite)
 			worker := parser.NewWorker(workerCtx, nil, 0)
 
 			// Get the flag values
@@ -58,7 +58,7 @@ You can specify a custom height range by using the %s and %s flags.
 				Msg("getting transactions...")
 			for k := startHeight; k <= endHeight; k++ {
 				log.Info().Int64("height", k).Msg("processing transactions...")
-				err = worker.ProcessTransactions(k)
+				err = worker.ProcessTransactions(k, config.Cfg.Parser.OverwriteExistingBlocks)
 				if err != nil {
 					return fmt.Errorf("error while re-fetching transactions of height %d: %s", k, err)
 				}

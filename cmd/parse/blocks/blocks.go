@@ -37,7 +37,7 @@ will be replaced with the data downloaded from the node.
 				return err
 			}
 
-			workerCtx := parser.NewContext(parseCtx.Node, parseCtx.Database, parseCtx.Logger, parseCtx.Modules)
+			workerCtx := parser.NewContext(parseCtx.Node, parseCtx.Database, parseCtx.Logger, parseCtx.Modules, parseCtx.ModulesToOverwrite)
 			worker := parser.NewWorker(workerCtx, nil, 0)
 
 			// Get the flag values
@@ -71,7 +71,7 @@ will be replaced with the data downloaded from the node.
 				Msg("getting blocks and transactions")
 			for k := startHeight; k <= endHeight; k++ {
 				if force {
-					err = worker.Process(k)
+					err = worker.Process(k, true)
 				} else {
 					err = worker.ProcessIfNotExists(k)
 				}

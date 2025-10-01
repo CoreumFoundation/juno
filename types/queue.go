@@ -1,8 +1,13 @@
 package types
 
+type HeightQueueItem struct {
+	Height    int64
+	Overwrite bool
+}
+
 // HeightQueue is a simple type alias for a (buffered) channel of block heights.
-type HeightQueue chan int64
+type HeightQueue chan HeightQueueItem
 
 func NewQueue(size int) HeightQueue {
-	return make(chan int64, size)
+	return make(chan HeightQueueItem, size)
 }

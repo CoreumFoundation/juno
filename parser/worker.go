@@ -29,8 +29,9 @@ const TOTAL_BLOCKS_PROMETHEUS_UPDATE_BLOCK_INTERVAL = 50
 type Worker struct {
 	index int
 
-	queue   types.HeightQueue
-	modules []modules.Module
+	queue              types.HeightQueue
+	modules            []modules.Module
+	modulesToOverwrite []modules.Module
 
 	node   node.Node
 	db     database.Database
@@ -40,18 +41,19 @@ type Worker struct {
 // NewWorker allows to create a new Worker implementation.
 func NewWorker(ctx *Context, queue types.HeightQueue, index int) Worker {
 	return Worker{
-		index:   index,
-		node:    ctx.Node,
-		queue:   queue,
-		db:      ctx.Database,
-		modules: ctx.Modules,
-		logger:  ctx.Logger,
+		index:              index,
+		node:               ctx.Node,
+		queue:              queue,
+		db:                 ctx.Database,
+		modules:            ctx.Modules,
+		modulesToOverwrite: ctx.ModulesToOverwrite,
+		logger:             ctx.Logger,
 	}
 }
 
 // Start starts a worker by listening for new jobs (block heights) from the
 // given worker queue. Any failed job is logged and re-enqueued.
-func (w Worker) Start(overwriteExistingBlocks bool) {
+func (w Worker) Start() {
 	logging.WorkerCount.Inc()
 	chainID, err := w.node.ChainID()
 	if err != nil {
@@ -61,11 +63,11 @@ func (w Worker) Start(overwriteExistingBlocks bool) {
 	for i := range w.queue {
 		operation := "block"
 		var err error
-		if overwriteExistingBlocks {
+		if i.Overwrite {
 			operation = "block overwrite"
-			err = w.Process(i)
+			err = w.Process(i.Height, true)
 		} else {
-			err = w.ProcessIfNotExists(i)
+			err = w.ProcessIfNotExists(i.Height)
 		}
 
 		if err != nil {
@@ -79,7 +81,7 @@ func (w Worker) Start(overwriteExistingBlocks bool) {
 			}()
 		}
 
-		logging.WorkerHeight.WithLabelValues(fmt.Sprintf("%d", w.index), chainID).Set(float64(i))
+		logging.WorkerHeight.WithLabelValues(fmt.Sprintf("%d", w.index), chainID).Set(float64(i.Height))
 	}
 }
 
@@ -97,12 +99,12 @@ func (w Worker) ProcessIfNotExists(height int64) error {
 		return nil
 	}
 
-	return w.Process(height)
+	return w.Process(height, false)
 }
 
 // Process fetches  a block for a given height and associated metadata and export it to a database.
 // It returns an error if any export process fails.
-func (w Worker) Process(height int64) error {
+func (w Worker) Process(height int64, overwrite bool) error {
 	if height == 0 {
 		cfg := config.Cfg.Parser
 
@@ -136,12 +138,12 @@ func (w Worker) Process(height int64) error {
 		return fmt.Errorf("failed to get validators for block: %s", err)
 	}
 
-	return w.ExportBlock(block, events, txs, vals)
+	return w.ExportBlock(block, events, txs, vals, overwrite)
 }
 
 // ProcessTransactions fetches transactions for a given height and stores them into the database.
 // It returns an error if the export process fails.
-func (w Worker) ProcessTransactions(height int64) error {
+func (w Worker) ProcessTransactions(height int64, overwrite bool) error {
 	block, err := w.node.Block(height)
 	if err != nil {
 		return fmt.Errorf("failed to get block from node: %s", err)
@@ -152,7 +154,7 @@ func (w Worker) ProcessTransactions(height int64) error {
 		return fmt.Errorf("failed to get transactions for block: %s", err)
 	}
 
-	return w.ExportTxs(height, txs)
+	return w.ExportTxs(height, txs, overwrite)
 }
 
 // HandleGenesis accepts a GenesisDoc and calls all the registered genesis handlers
@@ -198,7 +200,7 @@ func (w Worker) SaveValidators(vals []*tmtypes.Validator) error {
 // and persists them to the database along with attributable metadata. An error
 // is returned if the write fails.
 func (w Worker) ExportBlock(
-	b *tmctypes.ResultBlock, r *tmctypes.ResultBlockResults, txs []*types.Transaction, vals *tmctypes.ResultValidators,
+	b *tmctypes.ResultBlock, r *tmctypes.ResultBlockResults, txs []*types.Transaction, vals *tmctypes.ResultValidators, overwrite bool,
 ) error {
 	// Save all validators
 	err := w.SaveValidators(vals.Validators)
@@ -226,7 +228,11 @@ func (w Worker) ExportBlock(
 	}
 
 	// Call the block handlers
-	for _, module := range w.modules {
+	modulesToCall := w.modules
+	if overwrite {
+		modulesToCall = w.modulesToOverwrite
+	}
+	for _, module := range modulesToCall {
 		if blockModule, ok := module.(modules.BlockModule); ok {
 			err = blockModule.HandleBlock(b, r, txs, vals)
 			if err != nil {
@@ -236,7 +242,7 @@ func (w Worker) ExportBlock(
 	}
 
 	// Export the transactions
-	return w.ExportTxs(b.Block.Height, txs)
+	return w.ExportTxs(b.Block.Height, txs, overwrite)
 }
 
 // ExportCommit accepts a block commitment and a corresponding set of
@@ -298,9 +304,13 @@ func (w Worker) handleTx(tx *types.Transaction) {
 
 // handleMessage accepts the transaction and handles messages contained
 // inside the transaction.
-func (w Worker) handleMessage(index int, msg types.Message, tx *types.Transaction) {
+func (w Worker) handleMessage(index int, msg types.Message, tx *types.Transaction, overwrite bool) {
 	// Allow modules to handle the message
-	for _, module := range w.modules {
+	modulesToCall := w.modules
+	if overwrite {
+		modulesToCall = w.modulesToOverwrite
+	}
+	for _, module := range modulesToCall {
 		if messageModule, ok := module.(modules.MessageModule); ok {
 			err := messageModule.HandleMsg(index, msg, tx)
 			if err != nil {
@@ -326,7 +336,7 @@ func (w Worker) handleMessage(index int, msg types.Message, tx *types.Transactio
 					w.logger.Error("unable to unpack MsgExec inner message", "index", authzIndex, "error", err)
 				}
 
-				for _, module := range w.modules {
+				for _, module := range modulesToCall {
 					if messageModule, ok := module.(modules.AuthzMessageModule); ok {
 						err = messageModule.HandleMsgExec(index, authzIndex, executedMsg, tx)
 						if err != nil {
@@ -361,7 +371,7 @@ func escapeNonUTF8Characters(v string) string {
 
 // ExportTxs accepts a slice of transactions and persists then inside the database.
 // An error is returned if the write fails.
-func (w Worker) ExportTxs(height int64, txs []*types.Transaction) error {
+func (w Worker) ExportTxs(height int64, txs []*types.Transaction, overwrite bool) error {
 	// handle all transactions inside the block
 	for _, tx := range txs {
 		// non-utf8 characters are not accepted by postgres
@@ -378,7 +388,7 @@ func (w Worker) ExportTxs(height int64, txs []*types.Transaction) error {
 
 		// call the msg handlers
 		for i, msg := range tx.Tx.Body.Messages {
-			w.handleMessage(i, msg, tx)
+			w.handleMessage(i, msg, tx, overwrite)
 		}
 	}
 
